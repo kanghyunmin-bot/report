@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const source=fs.readFileSync(__dirname+'/../Resources/index.html','utf8');
+const sent=[],context=vm.createContext({NATIVE:true,window:{webkit:{messageHandlers:{native:{postMessage:x=>sent.push(JSON.parse(JSON.stringify(x)))}}}}});
+const save=source.slice(source.indexOf('function save(){'),source.indexOf('const wdOf='));
+const ack=source.slice(source.indexOf('window.hanjuDidSave='),source.indexOf('window.hanjuSetMascot='));
+vm.runInContext('let S={_revision:0,blocks:[]},saveInFlight=false,saveQueued=false;'+save+ack+';this.edit=name=>{S.blocks.push(name);save()};this.reject=()=>window.hanjuSaveRejected();',context);
+context.edit('one');context.edit('two');context.edit('three');assert.equal(sent.length,1);
+context.window.hanjuDidSave(1);assert.equal(sent.length,2);assert.equal(sent[1].state._revision,1);assert.deepEqual(sent[1].state.blocks,['one','two','three']);
+context.window.hanjuDidSave(2);assert.equal(sent.length,2);
+context.edit('four');context.edit('five');context.reject();assert.equal(sent.length,3);
+console.log('PASS: rapid edits coalesce behind save acknowledgement; current revision forwarded; stale-save rejection clears pending writes');

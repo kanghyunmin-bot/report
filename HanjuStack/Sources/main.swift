@@ -2,31 +2,27 @@ import Cocoa
 import WebKit
 import WidgetKit
 import CoreText
+import UniformTypeIdentifiers
 
-// 한 주 쌓기 — the board is a local web page; this shell saves it and trades changes with the widget.
-// The widget edits its own copy directly (no app launch); the app picks those edits up.
-let widgetBundleID = "local.hanju.stack.widget"
+// Sandboxed app and widget share one coordinated App Group store.
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var loaded = false
     var pending: [String] = []
-    var lastWidgetStamp: Date?
+    var lastRevision = -1
+    var store: HanjuStore!
     var watcher: Timer?
     var clockTimer: Timer?
     lazy var lesser = MenuBarLesser()
     lazy var walker = DesktopLesser()
 
-    let stateURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("HanjuStack/state.json")
-    let widgetDocs: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Containers/\(widgetBundleID)/Data/Documents")
-    var widgetCopy: URL { widgetDocs.appendingPathComponent("state.json") }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
-        _ = adoptWidgetChanges()   // taps made while the app was closed
+        let initial: [String: Any]?
+        do { store = try HanjuStore.production(); initial = try store.read(); lastRevision = HanjuStore.revision(initial) }
+        catch { NSAlert(error: error).runModal(); NSApp.terminate(nil); return }
 
         window = NSWindow(contentRect: NSRect(x: 160, y: 160, width: 1040, height: 820),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -47,12 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
         let config = WKWebViewConfiguration()
         config.userContentController.add(self, name: "native")
-        let state = (try? String(contentsOf: stateURL, encoding: .utf8)) ?? "null"
+        let state = initial.flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]) }.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
         config.userContentController.addUserScript(WKUserScript(source: "window.savedState = \(state);",
                                                                 injectionTime: .atDocumentStart, forMainFrameOnly: true))
         web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = self
-        web.setValue(false, forKey: "drawsBackground")
+        web.underPageBackgroundColor = .clear
         web.translatesAutoresizingMaskIntoConstraints = false
         frost.addSubview(web)
         NSLayoutConstraint.activate([
@@ -66,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         web.loadHTMLString("<!doctype html>\n<html lang=\"ko\">\n" + html, baseURL: page.deletingLastPathComponent())
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        syncWidget()
+        WidgetCenter.shared.reloadAllTimelines()
 
         lesser.onOpen = { [weak self] in self?.showWindow() }
         lesser.onCharacter = { [weak self] c in self?.run("window.hanjuSetMascot && window.hanjuSetMascot('\(c)')") }
@@ -92,6 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "계획 가져오기…", action: #selector(importPlan), keyEquivalent: "o")
+        appMenu.addItem(withTitle: "계획 백업 내보내기…", action: #selector(exportPlan), keyEquivalent: "s")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "한 주 쌓기 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         let editItem = NSMenuItem(); main.addItem(editItem)
@@ -104,65 +103,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         NSApp.mainMenu = main
     }
 
-    // The page posts {action:"save", state:{...}} after every change.
+    // Reject stale whole-board writes instead of overwriting newer widget edits.
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], body["action"] as? String == "save",
-              let state = body["state"], JSONSerialization.isValidJSONObject(state) else { return }
+        guard message.frameInfo.isMainFrame,
+              let body = message.body as? [String: Any], body["action"] as? String == "save",
+              let state = body["state"] as? [String: Any] else { return }
         do {
-            try FileManager.default.createDirectory(at: stateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
-            try data.write(to: stateURL, options: .atomic)
-            syncWidget()
-            refreshLesser()
+            let saved = try store.update(expected: HanjuStore.revision(state)) { _ in state }
+            lastRevision = HanjuStore.revision(saved)
+            run("window.hanjuDidSave && window.hanjuDidSave(\(lastRevision))")
+            WidgetCenter.shared.reloadAllTimelines(); refreshLesser()
         } catch {
-            NSLog("Save failed: %@", String(describing: error))
+            run("window.hanjuSaveRejected && window.hanjuSaveRejected()")
+            lastRevision = -1; pullFromWidget(); showError(error)
         }
-    }
-
-    func modified(_ url: URL) -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
-    }
-
-    /// The widget is sandboxed, so it keeps its own copy inside its container. Push ours there.
-    func syncWidget() {
-        guard FileManager.default.fileExists(atPath: widgetDocs.deletingLastPathComponent().path) else { return }
-        do {
-            try FileManager.default.createDirectory(at: widgetDocs, withIntermediateDirectories: true)
-            let data = (try? Data(contentsOf: stateURL)) ?? Data("{}".utf8)
-            try data.write(to: widgetCopy, options: .atomic)
-            lastWidgetStamp = modified(widgetCopy)
-            WidgetCenter.shared.reloadAllTimelines()
-        } catch {
-            NSLog("Widget sync failed: %@", String(describing: error))
-        }
-    }
-
-    /// If the widget changed its copy since we last wrote it, take the widget's version.
-    func adoptWidgetChanges() -> Bool {
-        guard let stamp = modified(widgetCopy), stamp != lastWidgetStamp else { return false }
-        lastWidgetStamp = stamp
-        let ours = modified(stateURL) ?? .distantPast
-        guard stamp > ours, let data = try? Data(contentsOf: widgetCopy),
-              (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { return false }
-        try? FileManager.default.createDirectory(at: stateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: stateURL, options: .atomic)
-        return true
     }
 
     func pullFromWidget() {
-        guard adoptWidgetChanges(), let json = try? String(contentsOf: stateURL, encoding: .utf8) else { return }
-        run("window.hanjuLoad && window.hanjuLoad(\(json))")
-        refreshLesser()
+        do {
+            guard let state = try store.read() else { return }
+            let revision = HanjuStore.revision(state)
+            guard revision != lastRevision else { return }
+            let data = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
+            guard let text = String(data: data, encoding: .utf8) else { return }
+            guard loaded else { return }
+            web.evaluateJavaScript("window.hanjuLoad && window.hanjuLoad(\(text))") { [weak self] value, error in
+                if error == nil, value as? Bool == true { self?.lastRevision = revision; self?.refreshLesser() }
+            }
+        } catch { NSLog("Shared state read failed: %@", error.localizedDescription) }
+    }
+
+    func showError(_ error: Error) {
+        let alert = NSAlert(error: error)
+        if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
+    }
+
+    @objc func importPlan() {
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.canChooseDirectories = false
+        panel.message = "이전 한 주 쌓기의 state.json 또는 백업 파일을 선택하세요. 현재 계획은 교체 전에 자동 백업돼요."
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let self, let url = panel.url else { return }
+            let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let imported = try HanjuStore.decode(Data(contentsOf: url))
+                _ = try self.store.update { old in
+                    if let old {
+                        let backup = self.store.url.deletingLastPathComponent().appendingPathComponent("before-import-" + UUID().uuidString + ".json")
+                        try JSONSerialization.data(withJSONObject: old).write(to: backup, options: .atomic)
+                    }
+                    return imported
+                }
+                self.lastRevision = -1; self.pullFromWidget(); WidgetCenter.shared.reloadAllTimelines()
+            } catch { self.showError(error) }
+        }
+    }
+
+    @objc func exportPlan() {
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "hanju-backup.json"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let self, let url = panel.url else { return }
+            do {
+                guard let state = try self.store.read() else { throw HanjuStore.StoreError.invalidData }
+                try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic)
+            } catch { self.showError(error) }
+        }
     }
 
     /// Menu bar 레서 + window look follow the saved state (character, 절전/라이트).
     func refreshLesser() {
-        let root = (try? Data(contentsOf: stateURL)).flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any] } ?? [:]
+        let root = (try? store.read()) ?? [:]
         lesser.character = root["mascot"] as? String == "passion" ? "passion" : "planner"
         let saver = root["theme"] as? String == "saver"
         walker.character = lesser.character
         if root["theme"] != nil { window?.appearance = NSAppearance(named: saver ? .darkAqua : .aqua) }
         lesser.update(root)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        let url = navigationAction.request.url
+        decisionHandler(url?.isFileURL == true || url?.scheme == "about" ? .allow : .cancel)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

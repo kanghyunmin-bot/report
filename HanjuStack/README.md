@@ -3,23 +3,17 @@
 할 일을 시간 길이만큼의 블록으로 만들어 일주일 판에 쌓는 앱이에요.
 화면은 `Resources/index.html`(웹 페이지), 저장과 위젯은 Swift가 맡아요.
 
-## 준비물 (처음 한 번)
+## 빌드·App Store 준비
 
-1. App Store에서 **Xcode** 설치 → 한 번 실행해서 추가 구성요소 설치
-2. 터미널:
-   ```sh
-   sudo xcode-select -s /Applications/Xcode.app
-   brew install xcodegen
-   ```
-
-## 빌드하고 설치하기
+전체 Xcode와 XcodeGen을 설치하고 `Config/Signing.xcconfig`에 본인의 Apple Developer Team ID와 고유 Bundle ID를 설정하세요. 앱과 위젯에 같은 App Group을 연결해야 합니다.
 
 ```sh
-cd 이 폴더
-./build.sh
-rm -rf /Applications/HanjuStack.app && cp -R build/Release/HanjuStack.app /Applications/
-open /Applications/HanjuStack.app
+./scripts/check.sh      # 계정 없이 실행 가능한 소스/저장 검사
+./build.sh              # 개발자 서명 빌드
+./scripts/archive.sh    # App Store용 Universal archive, 자동 업로드 없음
 ```
+
+계정 생성, 기존 데이터 가져오기와 제출 전 확인은 [APP_STORE.md](APP_STORE.md)에 정리했습니다. 아직 개발자 계정이 없으면 설정의 예시 ID를 실제 ID로 바꾼 다음 서명·실행 검증을 마쳐야 합니다.
 
 ## 글꼴
 
@@ -48,14 +42,7 @@ open /Applications/HanjuStack.app
 
 ## 데이터 위치
 
-- 앱: `~/Library/Application Support/HanjuStack/state.json`
-- 위젯: `~/Library/Containers/local.hanju.stack.widget/Data/Documents/state.json`
-  (둘 중 더 최근에 바뀐 쪽을 앱이 따라가요)
-
-## 앱스토어에 낼 때 바꿀 것
-
-지금 방식은 내 맥에서 쓰기용이에요. 앱스토어용은 앱에도 샌드박스를 켜고, 앱과 위젯이 **App Group** 공유 폴더를 쓰도록 바꾸고,
-번들 ID(`local.hanju.stack`)를 내 개발자 계정 기준으로 바꿔야 해요.
+앱과 위젯은 같은 App Group 컨테이너의 `state.json`을 공유합니다. 그룹 ID는 `Config/Signing.xcconfig`에서 설정합니다. 메뉴의 **계획 가져오기… / 계획 백업 내보내기…**로 기존 JSON을 가져오거나 백업할 수 있습니다. 이전 개인용 설치의 파일은 [이동 안내](APP_STORE.md#기존-개인용-설치에서-이동)를 참고하세요.
 
 ## 시간 설정
 

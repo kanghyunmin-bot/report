@@ -157,7 +157,7 @@ const NATIVE=!!(window.webkit&&window.webkit.messageHandlers&&window.webkit.mess
 const $=id=>document.getElementById(id), board=$('board');
 if(NATIVE)document.documentElement.classList.add('native');
 
-let S, drag=null, wk=0;
+let S, drag=null, wk=0, saveInFlight=false, saveQueued=false;
 const slotH=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--slot-h'))||10;
 const at=h=>h*6; // v4: ten-minute slots from midnight
 const FROM=()=>S.range.from*6, TO=()=>S.range.to*6, ROWS=()=>TO()-FROM();
@@ -194,7 +194,7 @@ function load(){
   return migrate(sample());
 }
 function save(){
-  if(NATIVE){window.webkit.messageHandlers.native.postMessage({action:'save',state:S});return}
+  if(NATIVE){if(saveInFlight){saveQueued=true;return}saveInFlight=true;window.webkit.messageHandlers.native.postMessage({action:'save',state:S});return}
   try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
 }
 const wdOf=k=>(new Date(k+'T00:00').getDay()+6)%7;
@@ -255,8 +255,10 @@ function showDate(k){const d=new Date(k+'T00:00');if(isNaN(d))return;
   wk=Math.round((monD-monT)/(7*864e5));render()}
 window.hanjuToggle=id=>{const b=find(id);if(!b)return;showDate(b.date);toggle(id)};
 window.hanjuShowDate=showDate;
-window.hanjuLoad=state=>{if(state&&Array.isArray(state.blocks)&&!drag){const was=new Set(S.blocks.filter(b=>b.done).map(b=>b.id));S=migrate(state);delete S._m;
-  S.blocks.filter(b=>b.done&&!was.has(b.id)&&b.date===key(today())).forEach(()=>L.celebrate());applyMode();render()}};
+window.hanjuLoad=state=>{if(state&&Array.isArray(state.blocks)&&!drag&&!saveInFlight){const was=new Set(S.blocks.filter(b=>b.done).map(b=>b.id));S=migrate(state);const migrated=S._m;delete S._m;if(migrated)save();
+  S.blocks.filter(b=>b.done&&!was.has(b.id)&&b.date===key(today())).forEach(()=>L.celebrate());applyMode();render();return true}return false};
+window.hanjuDidSave=revision=>{S._revision=revision;saveInFlight=false;if(saveQueued){saveQueued=false;save()}};
+window.hanjuSaveRejected=()=>{saveInFlight=false;saveQueued=false};
 window.hanjuSetMascot=c=>{S.mascot=c==='passion'?'passion':'planner';save();L.redraw()};
 
 $('f').addEventListener('submit',e=>{
