@@ -13,7 +13,7 @@
   --fixed:#8b91a3; --done:#b4b8c4; --t1:#24a9b8; --t2:#e6b21c; --t3:#8a56d3; --t4:#3fa55f; --t5:#dc4d4a; --t6:#3f6fd8; --t7:#e5852a;
   --f-display:"Hanju Nanum","NanumGothic","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --f-body:"Hanju Nanum","NanumGothic","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --slot-h:18px;
+  --slot-h:10px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#12141b;--well:rgba(255,255,255,.06);--cell:rgba(255,255,255,.07);--fg:#e8eaf2;--muted:#9097ab;--line:rgba(255,255,255,.1);--accent:#7096f0;--bad:#f06a66;--ghost:rgba(112,150,240,.22);--fixed:#5f6578;--done:#3c4152;color-scheme:dark}}
 :root[data-theme="dark"]{--fixed:#5f6578;--done:#3c4152;--bg:#12141b;--well:rgba(255,255,255,.06);--cell:rgba(255,255,255,.07);--fg:#e8eaf2;--muted:#9097ab;--line:rgba(255,255,255,.1);--accent:#7096f0;--bad:#f06a66;--ghost:rgba(112,150,240,.22);color-scheme:dark}
@@ -31,6 +31,7 @@ h1{font-family:var(--f-display);font-weight:800;font-size:26px;letter-spacing:-.
 .week{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .week button{background:var(--well);color:var(--fg);width:30px;height:30px;font-size:16px;line-height:1;padding:0}
 .week .now{width:auto;padding:0 10px;font-size:12px}
+.week>select{font:inherit;background:var(--well);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px}
 .week span{min-width:96px;text-align:center}
 form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 #name{flex:1 1 220px;min-width:0;font:inherit;font-size:15px;color:var(--fg);background:var(--well);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
@@ -47,7 +48,7 @@ button{font:inherit;cursor:pointer;border:0;border-radius:10px}
 #add:hover{filter:brightness(1.08)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scroll{overflow-x:auto}
-.board{display:grid;grid-template-columns:30px repeat(7,minmax(64px,1fr));column-gap:4px;min-width:520px}
+.board{display:grid;grid-template-columns:64px repeat(7,minmax(64px,1fr));column-gap:4px;min-width:520px}
 .dh{text-align:center;padding-bottom:6px;font-size:12px;color:var(--muted);line-height:1.25}
 .dh b{display:block;font-family:var(--f-display);font-weight:800;font-size:15px;color:var(--fg)}
 .dh.today b{color:var(--accent)}
@@ -55,7 +56,7 @@ button{font:inherit;cursor:pointer;border:0;border-radius:10px}
 .times{position:relative}
 .times span{position:absolute;right:4px;font-size:10px;color:var(--muted);transform:translateY(-50%);font-variant-numeric:tabular-nums}
 .col{position:relative;height:calc(var(--slots) * var(--slot-h));background-color:var(--well);border:1px solid var(--line);border-radius:6px;
-  background-image:linear-gradient(to bottom,var(--cell) 1px,transparent 1px);background-size:100% calc(var(--slot-h) * 2)}
+  background-image:linear-gradient(to bottom,var(--cell) 1px,transparent 1px);background-size:100% calc(var(--slot-h) * 6)}
 .col{overflow:hidden}
 .col.today{box-shadow:inset 0 0 0 1.5px var(--accent)}
 .hours{display:flex;align-items:center;gap:4px;margin-left:8px}
@@ -67,6 +68,7 @@ button{font:inherit;cursor:pointer;border:0;border-radius:10px}
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);opacity:.93}
 .blk::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.14;mix-blend-mode:overlay;
   background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.blk.short{font-size:9px;line-height:10px;padding:0 3px}
 .blk span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .blk.done{background-color:var(--done);--ink:#fff;color:#fff}
 .blk.fixed{background-color:var(--fixed);background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.14) 0 5px,transparent 5px 10px)}
@@ -109,6 +111,7 @@ button{font:inherit;cursor:pointer;border:0;border-radius:10px}
       </div>
     </div>
     <div class="week">
+      <select id="time-format" aria-label="시간 표시 방식"><option value="kr">한국식 · 24시간</option><option value="us">미국식 · AM/PM</option></select>
       <button type="button" id="prev" aria-label="지난주">‹</button>
       <span id="range"></span>
       <button type="button" id="next" aria-label="다음 주">›</button>
@@ -119,9 +122,9 @@ button{font:inherit;cursor:pointer;border:0;border-radius:10px}
   <form id="f">
     <input id="name" class="frost" type="text" maxlength="40" placeholder="할 일 입력 (예: PCCP 기출 2문제)" autocomplete="off" aria-label="할 일">
     <div class="dur frost" role="group" aria-label="걸리는 시간">
-      <button type="button" id="dm" aria-label="30분 줄이기">−</button>
+      <button type="button" id="dm" aria-label="10분 줄이기">−</button>
       <input id="dur" type="text" value="1시간" autocomplete="off" aria-label="걸리는 시간 (예: 1:30, 90분, 2시간)" title="직접 입력: 1:30 · 90분 · 1.5 · 2시간">
-      <button type="button" id="dp" aria-label="30분 늘리기">+</button>
+      <button type="button" id="dp" aria-label="10분 늘리기">+</button>
     </div>
     <div class="rep"><input type="checkbox" id="rep"><label for="rep" title="매주 같은 요일·시간에 반복돼요">↻ 매주 고정</label></div>
     <button id="add" type="submit">쌓기</button>
@@ -155,12 +158,12 @@ const $=id=>document.getElementById(id), board=$('board');
 if(NATIVE)document.documentElement.classList.add('native');
 
 let S, drag=null, wk=0;
-const slotH=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--slot-h'))||18;
-const at=h=>h*2; // times are half-hours from midnight
-const FROM=()=>S.range.from*2, TO=()=>S.range.to*2, ROWS=()=>TO()-FROM();
+const slotH=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--slot-h'))||10;
+const at=h=>h*6; // v4: ten-minute slots from midnight
+const FROM=()=>S.range.from*6, TO=()=>S.range.to*6, ROWS=()=>TO()-FROM();
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const hm=s=>{const m=s*30;return Math.floor(m/60)+':'+String(m%60).padStart(2,'0')};
+const hm=s=>{const m=s*10,h=Math.floor(m/60),minutes=String(m%60).padStart(2,'0');return S?.timeFormat==='us'?`${h%12||12}:${minutes} ${h%24<12?'AM':'PM'}`:`${h}:${minutes}`};
 const key=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
 const todayIdx=()=>(new Date().getDay()+6)%7;
@@ -169,8 +172,8 @@ const dayName=k=>DAYS[(new Date(k+'T00:00').getDay()+6)%7];
 
 function sample(){
   const w=weekDates(0).map(key), t=todayIdx(), d=k=>w[Math.min(6,t+k)];
-  const b=(name,len,c,date,h,done=false)=>({id:uid(),name,len,c,date,start:at(h),done,sample:true});
-  const f=(name,len,wd,h)=>({id:uid(),name,len,wd,start:at(h),fixed:true,sample:true});
+  const b=(name,len,c,date,h,done=false)=>({id:uid(),name,len,c,date,start:h*2,done,sample:true});
+  const f=(name,len,wd,h)=>({id:uid(),name,len,wd,start:h*2,fixed:true,sample:true});
   return {v:3,theme:'light',mascot:'planner',lesser:true,range:{from:8,to:24},n:5,fixed:[f('전공 수업',4,0,10),f('전공 수업',4,2,10)],blocks:[b('PCCP 기출 2문제',2,1,d(0),20),b('비트코인 원문 과제',4,3,d(1),19),b('HWP 변환 테스트',2,4,d(2),15),b('의자 보러 가기',3,7,d(3),13),b('철학책 읽기',2,2,d(0),22,true)]};
 }
 function migrate(v){ // older saves kept a weekday index, and counted time from 8시
@@ -178,6 +181,8 @@ function migrate(v){ // older saves kept a weekday index, and counted time from 
   if(!Array.isArray(v.fixed))v.fixed=[];
   if((v.v||0)<3){[...v.blocks,...v.fixed].forEach(b=>b.start=(b.start||0)+16);v.v=3;v._m=true}
   if(!v.range||!(v.range.to>v.range.from))v.range={from:8,to:24};
+  if(v.v<4){[...v.blocks,...v.fixed].forEach(b=>{b.start*=3;b.len*=3});v.v=4;v._m=true}
+  if(v.timeFormat!=='us')v.timeFormat='kr';
   if(v.theme!=='saver')v.theme='light';if(v.mascot!=='passion')v.mascot='planner';if(v.lesser!==false)v.lesser=true;
   v.blocks.forEach(b=>{if(!b.date&&b.day!=null){b.date=w[b.day]}delete b.day});
   v.blocks=v.blocks.filter(b=>b.date);if(typeof v.n!=='number')v.n=v.blocks.length;
@@ -186,7 +191,7 @@ function migrate(v){ // older saves kept a weekday index, and counted time from 
 function load(){
   if(NATIVE&&window.savedState&&Array.isArray(window.savedState.blocks))return migrate(window.savedState);
   try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&Array.isArray(v.blocks))return migrate(v)}catch(e){}
-  return sample();
+  return migrate(sample());
 }
 function save(){
   if(NATIVE){window.webkit.messageHandlers.native.postMessage({action:'save',state:S});return}
@@ -195,7 +200,7 @@ function save(){
 const wdOf=k=>(new Date(k+'T00:00').getDay()+6)%7;
 const find=id=>S.blocks.find(b=>b.id===id)||S.fixed.find(b=>b.id===id);
 const onDay=k=>[...S.fixed.filter(f=>f.wd===wdOf(k)),...S.blocks.filter(b=>b.date===k)];
-const fits=(date,start,len,ex)=>start>=0&&start+len<=48&&!onDay(date).some(o=>o.id!==ex&&o.start<start+len&&start<o.start+o.len);
+const fits=(date,start,len,ex)=>start>=0&&start+len<=144&&!onDay(date).some(o=>o.id!==ex&&o.start<start+len&&start<o.start+o.len);
 function spot(len){ // least-stacked day (from today on, in the week on screen), earliest free cell in the visible hours
   const days=weekDates(wk).map(key), from=wk===0?todayIdx():0;let best=null;
   if(wk<0)return null;
@@ -212,12 +217,12 @@ function render(fresh,flash){
   dates.forEach((dt,i)=>{const k=key(dt),mine=S.blocks.filter(b=>b.date===k);/* CLEAR counts only this week's blocks */
     html+=`<div class="dh${k===tk?' today':''}"><b>${DAYS[i]}</b>${dt.getMonth()+1}/${dt.getDate()}${mine.length&&mine.every(b=>b.done)?'<br><span class="clr">CLEAR</span>':''}</div>`});
   const step=S.range.to-S.range.from>12?2:1;
-  html+='<div class="times">';for(let hr=S.range.from+1;hr<S.range.to;hr+=step)html+=`<span style="top:${(hr*2-FROM())*h}px">${hr}</span>`;html+='</div>';
+  html+='<div class="times">';for(let hr=S.range.from+1;hr<S.range.to;hr+=step)html+=`<span style="top:${(hr*6-FROM())*h}px">${hm(hr*6)}</span>`;html+='</div>';
   let outside=0;
   dates.forEach(dt=>{const k=key(dt);
     html+=`<div class="col${k===tk?' today':''}" data-date="${k}" style="--slots:${ROWS()}">`;
     for(const b of onDay(k)){if(b.start+b.len<=FROM()||b.start>=TO()){outside++;continue}const top=(b.start-FROM())*h;
-      html+=`<div class="blk${b.fixed?' fixed':''}${b.done?' done':''}${fresh===b.id?' drop':''}${flash===b.id?' flash':''}" tabindex="0" role="button" data-id="${b.id}" title="${esc(b.name)} ${hm(b.start)}–${hm(b.start+b.len)}"
+      html+=`<div class="blk${b.len===1?' short':''}${b.fixed?' fixed':''}${b.done?' done':''}${fresh===b.id?' drop':''}${flash===b.id?' flash':''}" tabindex="0" role="button" data-id="${b.id}" title="${esc(b.name)} ${hm(b.start)}–${hm(b.start+b.len)}"
         aria-label="${esc(b.name)}, ${dayName(k)} ${hm(b.start)}부터${b.done?', 완료':''}"
         style="top:${top}px;height:${b.len*h}px;--c:${b.fixed?'var(--fixed)':'var(--t'+b.c+')'};--ink:${b.c===2?'#2a2200':'#fff'};--fall:${top+60}px"><span>${esc(b.name)}</span>${b.len*h>=16?'<i class="dup" title="복제 (⌘D)" aria-hidden="true">⧉</i>':''}</div>`}
     html+='</div>';
@@ -226,6 +231,8 @@ function render(fresh,flash){
   board.querySelectorAll('.blk').forEach(el=>{el.addEventListener('pointerdown',down);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle(el.dataset.id)}else if(e.key==='Delete'||e.key==='Backspace'){remove(el.dataset.id)}else if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='d'){e.preventDefault();dupe(el.dataset.id)}})});
   board.querySelectorAll('.blk .dup').forEach(d=>d.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();dupe(d.parentElement.dataset.id)}));
   $('hidden-note').textContent=outside?`보이는 시간 밖에 블록 ${outside}개`:'';
+  $('time-format').value=S.timeFormat;
+  for(const id of ['from','to'])for(const o of $(id).options)o.textContent=hm(Number(o.value)*6);
   $('from').value=S.range.from;$('to').value=S.range.to;
 }
 function toggle(id,quiet){const b=find(id);if(!b)return;if(b.fixed){toast('매주 고정 일정이에요 · 끌어서 옮기거나 휴지통으로 지워요');return}b.done=!b.done;if(b.done&&b.date===key(today()))L.celebrate();save();render(null,b.done?id:null);
@@ -261,9 +268,9 @@ $('f').addEventListener('submit',e=>{
   const b={id:uid(),name,len,c:(S.n%7)+1,date:p.d,start:p.s,done:false};S.n++;
   S.blocks.push(b);$('name').value='';save();render(b.id);toast(`${dayName(p.d)} ${hm(p.s)}에 쌓았어요`);
 });
-/* ---------- 걸리는 시간: − / + 로 30분씩, 또는 직접 입력 ---------- */
-let dur=2; // half-hours
-const durText=n=>{const h=Math.floor(n/2),m=n%2?30:0;return h&&m?`${h}시간 30분`:h?`${h}시간`:'30분'};
+/* ---------- 걸리는 시간: − / + 로 10분씩, 또는 직접 입력 ---------- */
+let dur=6; // ten-minute slots
+const durText=n=>{const mins=n*10,h=Math.floor(mins/60),m=mins%60;return h&&m?`${h}시간 ${m}분`:h?`${h}시간`:`${m}분`};
 function parseDur(t){
   t=String(t).trim().replace(/\s+/g,'');if(!t)return null;let m;
   if(m=t.match(/^(\d{1,2}):(\d{1,2})$/))return(+m[1]*60+ +m[2]);
@@ -273,13 +280,13 @@ function parseDur(t){
     return(+m[1])*60+(m[2]?+m[2]:0)}
   if(m=t.match(/^(\d*\.\d+)$/))return +m[1]*60;
   return null}
-function setDur(n){dur=Math.max(1,Math.min(48,n));$('dur').value=durText(dur);$('dm').disabled=dur<=1;$('dp').disabled=dur>=48}
-function readDur(){const v=parseDur($('dur').value);if(v!=null)setDur(Math.round(v/30)||1);else setDur(dur);return dur}
+function setDur(n){dur=Math.max(1,Math.min(144,n));$('dur').value=durText(dur);$('dm').disabled=dur<=1;$('dp').disabled=dur>=144}
+function readDur(){const v=parseDur($('dur').value);if(v!=null&&v>0){setDur(Math.ceil(v/10));if(v%10)toast('10분 단위로 올림해요 · '+durText(dur))}else setDur(dur);return dur}
 $('dm').onclick=()=>setDur(readDur()-1);$('dp').onclick=()=>setDur(readDur()+1);
 $('dur').addEventListener('focus',e=>e.target.select());
 $('dur').addEventListener('change',()=>{const v=parseDur($('dur').value);if(v==null)toast('예: 1:30 · 90분 · 2시간');readDur()});
 $('dur').addEventListener('keydown',e=>{if(e.key==='ArrowUp'){e.preventDefault();setDur(readDur()+1)}else if(e.key==='ArrowDown'){e.preventDefault();setDur(readDur()-1)}});
-setDur(2);
+setDur(6);
 $('clear').onclick=()=>{$('clear-opts').hidden=!$('clear-opts').hidden};
 document.querySelectorAll('#clear-opts .opt').forEach(btn=>{const label=btn.textContent;let t=null;
   btn.onclick=()=>{
@@ -289,9 +296,10 @@ document.querySelectorAll('#clear-opts .opt').forEach(btn=>{const label=btn.text
     if(w!=='fixed')S.blocks=[];if(w!=='blocks')S.fixed=[];
     save();render();toast(w==='all'?'모두 지웠어요':w==='blocks'?'고정 일정만 남겼어요':'고정 일정을 지웠어요');
   }});
-for(let i=0;i<=23;i++)$('from').insertAdjacentHTML('beforeend',`<option value="${i}">${i}시</option>`);
-for(let i=1;i<=24;i++)$('to').insertAdjacentHTML('beforeend',`<option value="${i}">${i}시</option>`);
+for(let i=0;i<=23;i++)$('from').insertAdjacentHTML('beforeend',`<option value="${i}">${hm(i*6)}</option>`);
+for(let i=1;i<=24;i++)$('to').insertAdjacentHTML('beforeend',`<option value="${i}">${hm(i*6)}</option>`);
 function setRange(){let f=+$('from').value,t=+$('to').value;if(t<=f){toast('끝 시간은 시작보다 늦어야 해요');render();return}S.range={from:f,to:t};save();render()}
+$('time-format').onchange=()=>{S.timeFormat=$('time-format').value;save();render()};
 $('from').onchange=setRange;$('to').onchange=setRange;
 $('prev').onclick=()=>{wk--;render()};$('next').onclick=()=>{wk++;render()};$('now').onclick=()=>{wk=0;render()};
 
@@ -357,7 +365,7 @@ const L=(()=>{
   function place(){if(x==null){x=span()-20;target=20+Math.random()*(span()-40)}box.style.transform=`translateX(${Math.round(x)}px)`}
   const names={planner:'계획단장 레서',passion:'열정 레서'};
   function frameAt(time,times){let pos=Math.max(0,time)%times.reduce((a,b)=>a+b,0);for(let i=0;i<times.length;i++){if(pos<times[i])return i;pos-=times[i]}return 0}
-  function nowBlock(){const d=new Date(),k=key(d),slot=d.getHours()*2+(d.getMinutes()>=30?1:0);
+  function nowBlock(){const d=new Date(),k=key(d),slot=d.getHours()*6+Math.floor(d.getMinutes()/10);
     return S.blocks.find(b=>b.date===k&&!b.done&&b.start<=slot&&slot<b.start+b.len)}
   function currentMode(now){
     if(celebStart!=null){const per=TIMINGS[S.mascot].complete.reduce((a,b)=>a+b,0)*5;
