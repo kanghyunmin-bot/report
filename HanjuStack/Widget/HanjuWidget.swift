@@ -66,15 +66,10 @@ func wf(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
     return Font.custom(name, size: size)
 }
 
-func stateFileURL() -> URL {
-    URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/state.json")
-}
-
 func int(_ v: Any?, _ fallback: Int) -> Int { (v as? NSNumber)?.intValue ?? fallback }
 
 func loadBoard() -> Board {
-    guard let data = try? Data(contentsOf: stateFileURL()),
-          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return Board() }
+    guard let store = try? HanjuStore.production(), let root = try? store.read() else { return Board() }
     var board = Board()
     board.timeFormat = root["timeFormat"] as? String == "us" ? "us" : "kr"
     board.dark = root["theme"] as? String == "saver"
@@ -144,16 +139,13 @@ func clock(_ slot: Int, _ format: String = "kr") -> String {
 
 // MARK: - 위젯 안에서 바로 처리하는 버튼 동작 (앱을 열지 않음)
 
-func editBlocks(_ change: (inout [[String: Any]]) -> Void) {
-    let url = stateFileURL()
-    guard let data = try? Data(contentsOf: url),
-          var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-          var blocks = root["blocks"] as? [[String: Any]] else { return }
-    change(&blocks)
-    root["blocks"] = blocks
-    if let out = try? JSONSerialization.data(withJSONObject: root, options: [.sortedKeys]) {
-        try? out.write(to: url, options: .atomic)
+func editBlocks(_ change: (inout [[String: Any]]) -> Void) throws {
+    let store = try HanjuStore.production()
+    try store.update { current in
+        guard var root = current, var blocks = root["blocks"] as? [[String: Any]] else { throw HanjuStore.StoreError.invalidData }
+        change(&blocks); root["blocks"] = blocks; return root
     }
+    WidgetCenter.shared.reloadAllTimelines()
 }
 
 struct ToggleBlockIntent: AppIntent {
@@ -163,7 +155,7 @@ struct ToggleBlockIntent: AppIntent {
     init(blockID: String) { self.blockID = blockID }
     func perform() async throws -> some IntentResult {
         let id = blockID
-        editBlocks { blocks in
+        try editBlocks { blocks in
             if let i = blocks.firstIndex(where: { ($0["id"] as? String) == id }) {
                 blocks[i]["done"] = !((blocks[i]["done"] as? NSNumber)?.boolValue ?? false)
             }
@@ -179,7 +171,7 @@ struct DeleteBlockIntent: AppIntent {
     init(blockID: String) { self.blockID = blockID }
     func perform() async throws -> some IntentResult {
         let id = blockID
-        editBlocks { blocks in blocks.removeAll { ($0["id"] as? String) == id } }
+        try editBlocks { blocks in blocks.removeAll { ($0["id"] as? String) == id } }
         return .result()
     }
 }

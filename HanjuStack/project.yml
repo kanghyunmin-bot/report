@@ -1,25 +1,34 @@
 name: HanjuStack
 options:
-  bundleIdPrefix: local.hanju
   deploymentTarget:
     macOS: "14.0"
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "3"
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGN_STYLE: Manual
-    DEVELOPMENT_TEAM: ""
-    PROVISIONING_PROFILE_SPECIFIER: ""
-    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "4"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_APP_SANDBOX: YES
+schemes:
+  HanjuStack:
+    build:
+      targets:
+        HanjuStack: all
+    archive:
+      config: Release
 targets:
   HanjuStack:
     type: application
     platform: macOS
     sources:
       - path: Sources
+      - path: Shared
       - path: Resources/index.html
+      - path: Resources/PrivacyInfo.xcprivacy
       - path: Resources/Mascots
         type: folder
       - path: Resources/Fonts
@@ -29,13 +38,21 @@ targets:
       path: Generated/App-Info.plist
       properties:
         CFBundleDisplayName: 한 주 쌓기
+        LSApplicationCategoryType: public.app-category.productivity
         NSHighResolutionCapable: true
+        HanjuAppGroup: $(HANJU_APP_GROUP)
         CFBundleURLTypes:
           - CFBundleURLName: Hanju
             CFBundleURLSchemes: [hanju]
+    entitlements:
+      path: Config/App.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(HANJU_APP_GROUP)]
+        com.apple.security.files.user-selected.read-write: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.hanju.stack
+        PRODUCT_BUNDLE_IDENTIFIER: $(HANJU_BUNDLE_ID)
         PRODUCT_NAME: HanjuStack
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
@@ -46,22 +63,25 @@ targets:
     platform: macOS
     sources:
       - path: Widget
-        excludes:
-          - "entitlements.plist"
+        excludes: [entitlements.plist]
+      - path: Shared
       - path: Resources/Fonts
         type: folder
     info:
       path: Generated/Widget-Info.plist
       properties:
         CFBundleDisplayName: 한 주 쌓기
+        HanjuAppGroup: $(HANJU_APP_GROUP)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Widget/entitlements.plist
       properties:
         com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(HANJU_APP_GROUP)]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.hanju.stack.widget
+        PRODUCT_BUNDLE_IDENTIFIER: $(HANJU_BUNDLE_ID).widget
         PRODUCT_NAME: HanjuWidget
+        APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES

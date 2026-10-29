@@ -1,0 +1,5 @@
+// Set these after Apple Developer enrollment. Do not commit credentials/profiles.
+DEVELOPMENT_TEAM =
+HANJU_BUNDLE_ID = com.example.hanjustack
+HANJU_APP_GROUP = group.$(HANJU_BUNDLE_ID)
+CODE_SIGN_STYLE = Automatic
