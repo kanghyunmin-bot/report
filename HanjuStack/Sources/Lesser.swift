@@ -75,11 +75,15 @@ func lesserSnapshot(_ root: [String: Any], now: Date = Date()) -> CompanionSnaps
     f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
     let today = f.string(from: now)
     let cal = Calendar(identifier: .gregorian)
-    let slot = cal.component(.hour, from: now) * 2 + (cal.component(.minute, from: now) >= 30 ? 1 : 0)
+    let slot = cal.component(.hour, from: now) * 6 + cal.component(.minute, from: now) / 10
+    let version = (root["v"] as? NSNumber)?.intValue ?? 0
+    let factor = version >= 4 ? 1 : 3
+    let shift = version >= 3 ? 0 : 16
     let rows = (root["blocks"] as? [[String: Any]]) ?? []
     let goals: [CompanionGoal] = rows.compactMap { r in
         guard let id = r["id"] as? String, let name = r["name"] as? String, r["date"] as? String == today else { return nil }
-        let start = (r["start"] as? NSNumber)?.intValue ?? 0, len = (r["len"] as? NSNumber)?.intValue ?? 1
+        let start = (((r["start"] as? NSNumber)?.intValue ?? 0) + shift) * factor
+        let len = ((r["len"] as? NSNumber)?.intValue ?? 1) * factor
         let done = (r["done"] as? NSNumber)?.boolValue ?? false
         let status = done ? 2 : (start <= slot && slot < start + len ? 1 : 0)
         return CompanionGoal(id: id, day: today, subject: "", title: name, status: status)

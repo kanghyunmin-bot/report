@@ -5,7 +5,7 @@ import AppIntents
 import CoreText
 
 // 한 주 쌓기 위젯 — reads (and edits) the copy the app keeps inside this extension's container.
-// Times are counted in half-hours from midnight: 18 = 9:00, 47 = 23:30.
+// v4 uses ten-minute slots; older saves are converted only when reading.
 let dayNames = ["월", "화", "수", "목", "금", "토", "일"]
 
 struct Block: Identifiable {
@@ -25,14 +25,15 @@ struct Block: Identifiable {
 struct DayRange {
     var from = 8
     var to = 24
-    var first: Int { from * 2 }
-    var last: Int { to * 2 }
+    var first: Int { from * 6 }
+    var last: Int { to * 6 }
     var slots: Int { max(1, last - first) }
 }
 
 struct Board {
     var blocks: [Block] = []
     var range = DayRange()
+    var timeFormat = "kr"
     var dark = false          // 앱의 절전 모드(어두운 화면)
 }
 
@@ -75,6 +76,7 @@ func loadBoard() -> Board {
     guard let data = try? Data(contentsOf: stateFileURL()),
           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return Board() }
     var board = Board()
+    board.timeFormat = root["timeFormat"] as? String == "us" ? "us" : "kr"
     board.dark = root["theme"] as? String == "saver"
     if let r = root["range"] as? [String: Any] {
         let from = min(23, max(0, int(r["from"], 8)))
@@ -83,16 +85,17 @@ func loadBoard() -> Board {
     }
     // Saves from before the time-range update counted from 8:00.
     let shift = int(root["v"], 0) >= 3 ? 0 : 16
+    let factor = int(root["v"], 0) >= 4 ? 1 : 3
     let weekly: [Block] = ((root["fixed"] as? [[String: Any]]) ?? []).compactMap { r in
         guard let id = r["id"] as? String, let name = r["name"] as? String else { return nil }
-        return Block(id: id, name: name, len: max(1, int(r["len"], 2)), color: 0, date: "",
-                     start: max(0, int(r["start"], 0) + shift), done: false, fixed: true, wd: int(r["wd"], 0))
+        return Block(id: id, name: name, len: max(1, int(r["len"], 2)) * factor, color: 0, date: "",
+                     start: max(0, int(r["start"], 0) + shift) * factor, done: false, fixed: true, wd: int(r["wd"], 0))
     }
     let dated: [Block] = ((root["blocks"] as? [[String: Any]]) ?? []).compactMap { r in
         guard let id = r["id"] as? String, let name = r["name"] as? String,
               let date = r["date"] as? String else { return nil }
-        return Block(id: id, name: name, len: max(1, int(r["len"], 2)), color: int(r["c"], 1), date: date,
-                     start: max(0, int(r["start"], 0) + shift), done: (r["done"] as? NSNumber)?.boolValue ?? false)
+        return Block(id: id, name: name, len: max(1, int(r["len"], 2)) * factor, color: int(r["c"], 1), date: date,
+                     start: max(0, int(r["start"], 0) + shift) * factor, done: (r["done"] as? NSNumber)?.boolValue ?? false)
     }
     board.blocks = weekly + dated
     return board
@@ -133,9 +136,10 @@ let doneGray = Color(red: 0.62, green: 0.63, blue: 0.66).opacity(0.55)
 func fillColor(_ b: Block) -> Color { b.fixed ? fixedGray : b.done ? doneGray : blockColor(b.color) }
 func textColor(_ b: Block) -> Color { b.fixed || b.done ? .white : inkColor(b.color) }
 
-func clock(_ slot: Int) -> String {
-    let m = slot * 30
-    return String(format: "%d:%02d", m / 60, m % 60)
+func clock(_ slot: Int, _ format: String = "kr") -> String {
+    let m = slot * 10, h = m / 60
+    if format == "us" { return String(format: "%d:%02d %@", h % 12 == 0 ? 12 : h % 12, m % 60, h % 24 < 12 ? "AM" : "PM") }
+    return String(format: "%d:%02d", h, m % 60)
 }
 
 // MARK: - 위젯 안에서 바로 처리하는 버튼 동작 (앱을 열지 않음)
@@ -288,7 +292,7 @@ struct WeekView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(monthDay(days[0])) – \(monthDay(days[6]))").font(wf(14, .heavy)).monospacedDigit()
                 Spacer()
-                Text("완료 \(Double(doneSum) / 2, specifier: "%g") / \(Double(total) / 2, specifier: "%g")시간")
+                Text("완료 \(Double(doneSum) / 6, specifier: "%g") / \(Double(total) / 6, specifier: "%g")시간")
                     .font(wf(10)).foregroundStyle(.secondary)
             }
             HStack(alignment: .top, spacing: 3) {
@@ -340,16 +344,16 @@ struct FoldedDayView: View {
                         GeometryReader { geo in
                             let step = geo.size.height / CGFloat(perCol)
                             ForEach(0..<(h1 - h0), id: \.self) { k in
-                                Text("\(h0 + k)")
+                                Text(clock((h0 + k) * 6, entry.board.timeFormat))
                                     .font(wf(8, .medium)).monospacedDigit()
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 14, alignment: .trailing)
+                                    .frame(width: 38, alignment: .trailing)
                                     .padding(.top, step * CGFloat(k))
                             }
                         }
-                        .frame(width: 14)
+                        .frame(width: 38)
                         // the fold always spans perCol hours so every fold has the same scale
-                        Strip(blocks: list, first: h0 * 2, last: h0 * 2 + perCol * 2, showText: true, fontSize: 8)
+                        Strip(blocks: list, first: h0 * 6, last: h0 * 6 + perCol * 6, showText: true, fontSize: 8)
                     }
                 }
             }
@@ -406,7 +410,7 @@ struct TodayList: View {
                 Text("오늘 쌓은 블록이 없어요").font(wf(11)).foregroundStyle(.secondary)
             } else {
                 ForEach(Array(list.prefix(limit))) { b in
-                    TodayRow(block: b, compact: !large)
+                    TodayRow(block: b, compact: !large, timeFormat: entry.board.timeFormat)
                 }
                 if list.count > limit {
                     Text("+ \(list.count - limit)개").font(wf(9)).foregroundStyle(.secondary)
@@ -423,6 +427,7 @@ struct TodayList: View {
 struct TodayRow: View {
     let block: Block
     let compact: Bool
+    var timeFormat = "kr"
 
     var piece: some View {
         VStack(spacing: 1) {
@@ -440,7 +445,7 @@ struct TodayRow: View {
                     Text(block.name).font(wf(12, .semibold)).lineLimit(1)
                         .foregroundStyle(.secondary)
                     if !compact {
-                        Text("\(clock(block.start))–\(clock(block.end)) · 매주")
+                        Text("\(clock(block.start, timeFormat))–\(clock(block.end, timeFormat)) · 매주")
                             .font(wf(10)).foregroundStyle(.secondary)
                     }
                 }
@@ -456,7 +461,7 @@ struct TodayRow: View {
                                 .strikethrough(block.done)
                                 .foregroundStyle(block.done ? Color.secondary : Color.primary)
                             if !compact {
-                                Text("\(clock(block.start))–\(clock(block.end))")
+                                Text("\(clock(block.start, timeFormat))–\(clock(block.end, timeFormat))")
                                     .font(wf(10)).foregroundStyle(.secondary)
                             }
                         }
