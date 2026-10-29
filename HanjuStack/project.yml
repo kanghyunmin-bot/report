@@ -1,0 +1,67 @@
+name: HanjuStack
+options:
+  bundleIdPrefix: local.hanju
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "3"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  HanjuStack:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Resources/index.html
+      - path: Resources/Mascots
+        type: folder
+      - path: Resources/Fonts
+        type: folder
+      - path: Resources/Assets.xcassets
+    info:
+      path: Generated/App-Info.plist
+      properties:
+        CFBundleDisplayName: 한 주 쌓기
+        NSHighResolutionCapable: true
+        CFBundleURLTypes:
+          - CFBundleURLName: Hanju
+            CFBundleURLSchemes: [hanju]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.hanju.stack
+        PRODUCT_NAME: HanjuStack
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: HanjuWidget
+        embed: true
+  HanjuWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Widget
+        excludes:
+          - "entitlements.plist"
+      - path: Resources/Fonts
+        type: folder
+    info:
+      path: Generated/Widget-Info.plist
+      properties:
+        CFBundleDisplayName: 한 주 쌓기
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/entitlements.plist
+      properties:
+        com.apple.security.app-sandbox: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.hanju.stack.widget
+        PRODUCT_NAME: HanjuWidget
+        SKIP_INSTALL: YES
